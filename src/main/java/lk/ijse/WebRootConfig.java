@@ -1,6 +1,7 @@
 package lk.ijse;
 
 import com.zaxxer.hikari.HikariDataSource;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
@@ -9,6 +10,7 @@ import org.springframework.core.env.Environment;
 @PropertySource("classPath:/application.properties")
 public class WebRootConfig {
 
+    @Bean
     public HikariDataSource dataSource(Environment env){
         HikariDataSource config = new HikariDataSource();
         config.setJdbcUrl(env.getRequiredProperty("spring.datasource.url"));
