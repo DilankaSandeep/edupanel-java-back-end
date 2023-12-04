@@ -1,7 +1,12 @@
 package lk.ijse.api;
 
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.Bucket;
+import com.google.cloud.storage.Storage;
 import com.zaxxer.hikari.HikariDataSource;
 import lk.ijse.to.request.LecturerReqTO;
+import lk.ijse.to.response.LecturerResTO;
+import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
@@ -9,7 +14,10 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.sql.DataSource;
 import javax.validation.Valid;
+import java.io.IOException;
+import java.net.URL;
 import java.sql.*;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/v1/lecturers")
@@ -20,9 +28,12 @@ public class LecturerHttpController {
     @Autowired
     private HikariDataSource pool;
 
+    @Autowired
+    private Bucket bucket;
+
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping(consumes = "multipart/form-data", produces = "application/json")
-    public void createNewLecturer(@ModelAttribute @Valid LecturerReqTO lecturer){
+    public LecturerResTO createNewLecturer(@ModelAttribute @Valid LecturerReqTO lecturer){
         try (Connection connection = pool.getConnection()) {
             connection.setAutoCommit(false);
 
@@ -41,7 +52,8 @@ public class LecturerHttpController {
                 int lecturerId = generatedKeys.getInt(1);
                 String picture = lecturerId + "-" + lecturer.getName();
 
-                if (lecturer.getPicture() != null || !lecturer.getPicture().isEmpty()) {
+                String pictureUrl = null;
+                if (lecturer.getPicture() != null && !lecturer.getPicture().isEmpty()) {
                     PreparedStatement stmUpdateLecturer = connection
                             .prepareStatement("UPDATE lecturer SET picture = ? WHERE id = ?");
                     stmUpdateLecturer.setString(1, picture);
@@ -62,14 +74,28 @@ public class LecturerHttpController {
                 stmInsertRank.setInt(2, rank);
                 stmInsertRank.executeUpdate();
 
+                if(lecturer.getPicture() !=null && !lecturer.getPicture().isEmpty()){
+                    Blob blob = bucket.create(picture, lecturer.getPicture().getInputStream(), lecturer.getPicture().getContentType());
+                    pictureUrl = blob.signUrl(1, TimeUnit.DAYS, Storage.SignUrlOption.withV4Signature()).toString();
+
+
+                }
+
                 connection.commit();
+                return new LecturerResTO(lecturerId,
+                        lecturer.getName(),
+                        lecturer.getDesignation(),
+                        lecturer.getQualifications(),
+                        lecturer.getType(),
+                        pictureUrl,
+                        lecturer.getLinkedin());
             }catch (Throwable t){
                 connection.rollback();
                 throw t;
             }finally {
                 connection.setAutoCommit(true);
             }
-        } catch (SQLException e) {
+        } catch (Throwable e) {
             throw new RuntimeException(e);
         }
     }
